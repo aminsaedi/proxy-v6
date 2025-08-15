@@ -60,6 +60,8 @@ type AgentConfig struct {
 	CoordinatorURL  string   `json:"coordinator_url"`
 	MetricsPort     int      `json:"metrics_port"`
 	ExcludeInterfaces []string `json:"exclude_interfaces"`
+	AllowedIPs      []string `json:"allowed_ips"`      // IPs allowed to connect to proxies
+	ProxyMode       string   `json:"proxy_mode"`       // "open" or "restricted"
 }
 
 type CoordinatorConfig struct {

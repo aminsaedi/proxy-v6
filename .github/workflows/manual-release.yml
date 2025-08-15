@@ -32,25 +32,30 @@ jobs:
         run: |
           mkdir -p dist
           
+          VERSION="${{ github.event.inputs.version }}"
+          GIT_COMMIT="${{ github.sha }}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X proxy-v6/pkg/version.Version=${VERSION} -X proxy-v6/pkg/version.GitCommit=${GIT_COMMIT:0:7} -X proxy-v6/pkg/version.BuildDate=${BUILD_DATE}"
+          
           # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/agent-linux-amd64 cmd/agent/main.go
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/coordinator-linux-amd64 cmd/coordinator/main.go
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/monitor-linux-amd64 cmd/monitor/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/agent-linux-amd64 cmd/agent/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/coordinator-linux-amd64 cmd/coordinator/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/monitor-linux-amd64 cmd/monitor/main.go
           
           # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/agent-linux-arm64 cmd/agent/main.go
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/coordinator-linux-arm64 cmd/coordinator/main.go
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/monitor-linux-arm64 cmd/monitor/main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/agent-linux-arm64 cmd/agent/main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/coordinator-linux-arm64 cmd/coordinator/main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/monitor-linux-arm64 cmd/monitor/main.go
           
           # Darwin AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/agent-darwin-amd64 cmd/agent/main.go
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/coordinator-darwin-amd64 cmd/coordinator/main.go
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/monitor-darwin-amd64 cmd/monitor/main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/agent-darwin-amd64 cmd/agent/main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/coordinator-darwin-amd64 cmd/coordinator/main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/monitor-darwin-amd64 cmd/monitor/main.go
           
           # Darwin ARM64
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/agent-darwin-arm64 cmd/agent/main.go
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/coordinator-darwin-arm64 cmd/coordinator/main.go
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/monitor-darwin-arm64 cmd/monitor/main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/agent-darwin-arm64 cmd/agent/main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/coordinator-darwin-arm64 cmd/coordinator/main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/monitor-darwin-arm64 cmd/monitor/main.go
 
       - name: Create archives
         run: |

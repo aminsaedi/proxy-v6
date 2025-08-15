@@ -1,0 +1,102 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Binary output directory
+bin/
+dist/
+
+# IDE specific files
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.iml
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Configuration files with sensitive data
+*-config.yaml
+*-config.yml
+config.yaml
+config.yml
+!example-config.yaml
+!example-config.yml
+
+# Log files
+*.log
+logs/
+*.pid
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+/tmp/
+
+# Debug files
+debug
+__debug_bin
+
+# Coverage reports
+coverage.txt
+coverage.html
+*.coverprofile
+
+# Profiling data
+*.prof
+*.pprof
+
+# Generated files
+*.generated.go
+
+# Tinyproxy specific
+tinyproxy-*.conf
+/var/log/tinyproxy/
+
+# System files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux trash folder
+.Trash-*
+
+# Windows
+Desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+
+# Build artifacts
+*.a
+*.o
+
+# Go modules download cache
+go.sum.backup
+
+# Air live reload
+.air.toml
+tmp/

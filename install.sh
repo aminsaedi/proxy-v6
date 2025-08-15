@@ -142,24 +142,30 @@ fi
 if check_existing_installation; then
     echo ""
     if [ "$FORCE_INSTALL" != true ]; then
-        echo -e "${YELLOW}Proxy-v6 is already installed. Would you like to upgrade to $LATEST_RELEASE? (y/n/f)${NC}"
-        echo "  y - Yes, upgrade to latest version"
-        echo "  n - No, keep current version"
-        echo "  f - Force reinstall"
-        read -r response
-        case "$response" in
-            [yY]|[yY][eE][sS])
-                echo -e "${GREEN}Proceeding with upgrade...${NC}"
-                ;;
-            [fF]|[fF][oO][rR][cC][eE])
-                echo -e "${YELLOW}Force reinstalling...${NC}"
-                FORCE_INSTALL=true
-                ;;
-            *)
-                echo -e "${BLUE}Installation cancelled${NC}"
-                exit 0
-                ;;
-        esac
+        # Check if we're in interactive mode
+        if [ -t 0 ]; then
+            echo -e "${YELLOW}Proxy-v6 is already installed. Would you like to upgrade to $LATEST_RELEASE? (y/n/f)${NC}"
+            echo "  y - Yes, upgrade to latest version"
+            echo "  n - No, keep current version"
+            echo "  f - Force reinstall"
+            read -r response
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    echo -e "${GREEN}Proceeding with upgrade...${NC}"
+                    ;;
+                [fF]|[fF][oO][rR][cC][eE])
+                    echo -e "${YELLOW}Force reinstalling...${NC}"
+                    FORCE_INSTALL=true
+                    ;;
+                *)
+                    echo -e "${BLUE}Installation cancelled${NC}"
+                    exit 0
+                    ;;
+            esac
+        else
+            # Non-interactive mode - default to upgrade
+            echo -e "${GREEN}Non-interactive mode detected. Proceeding with upgrade to $LATEST_RELEASE...${NC}"
+        fi
     else
         echo -e "${YELLOW}Force reinstalling...${NC}"
     fi

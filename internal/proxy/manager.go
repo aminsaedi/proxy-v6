@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"proxy-v6/pkg/models"
@@ -56,16 +57,56 @@ func (m *Manager) StartProxy(ctx context.Context, ipv6 models.IPv6Address) (*mod
 	}
 	
 	instanceID := fmt.Sprintf("%s-%d", ipv6.IP.String(), port)
+	m.logger.Debugf("Starting proxy instance: %s", instanceID)
 	
 	configPath := fmt.Sprintf("/tmp/tinyproxy-%s.conf", instanceID)
 	if err := m.createTinyproxyConfig(configPath, ipv6.IP.String(), port); err != nil {
 		return nil, fmt.Errorf("failed to create config: %w", err)
 	}
+	m.logger.Debugf("Created config file: %s", configPath)
 	
-	cmd := exec.CommandContext(ctx, "tinyproxy", "-c", configPath)
+	// Add debug mode and foreground mode for better error visibility
+	cmd := exec.CommandContext(ctx, "tinyproxy", "-d", "-c", configPath)
+	
+	// Capture stdout and stderr for debugging
+	stdoutPipe, _ := cmd.StdoutPipe()
+	stderrPipe, _ := cmd.StderrPipe()
+	
 	if err := cmd.Start(); err != nil {
+		m.logger.Errorf("Failed to start tinyproxy for %s: %v", instanceID, err)
+		// Try to read any output that might have been produced
+		if output, _ := os.ReadFile(configPath); len(output) > 0 {
+			m.logger.Debugf("Config file contents:\n%s", string(output))
+		}
 		return nil, fmt.Errorf("failed to start tinyproxy: %w", err)
 	}
+	
+	// Start goroutines to capture output
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutPipe.Read(buf)
+			if err != nil {
+				break
+			}
+			if n > 0 {
+				m.logger.Infof("Tinyproxy[%s] stdout: %s", instanceID, string(buf[:n]))
+			}
+		}
+	}()
+	
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if err != nil {
+				break
+			}
+			if n > 0 {
+				m.logger.Warnf("Tinyproxy[%s] stderr: %s", instanceID, string(buf[:n]))
+			}
+		}
+	}()
 	
 	instance := &models.ProxyInstance{
 		ID:        instanceID,
@@ -82,14 +123,43 @@ func (m *Manager) StartProxy(ctx context.Context, ipv6 models.IPv6Address) (*mod
 	
 	go m.monitorProcess(instanceID, cmd)
 	
-	time.Sleep(2 * time.Second)
-	
-	if m.checkProxyHealth(ipv6.IP.String(), port) {
-		instance.Status = models.ProxyStatusRunning
-		m.logger.Infof("Proxy started successfully: %s on port %d", ipv6.IP.String(), port)
-	} else {
-		instance.Status = models.ProxyStatusError
-		m.logger.Errorf("Proxy failed health check: %s on port %d", ipv6.IP.String(), port)
+	// Give tinyproxy more time to start up and check multiple times
+	retries := 5
+	for i := 0; i < retries; i++ {
+		time.Sleep(2 * time.Second)
+		
+		// Check if process is still running
+		if cmd.Process != nil {
+			// Use kill -0 to check if process exists
+			if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+				m.logger.Errorf("Tinyproxy process died during startup (attempt %d/%d): %v", i+1, retries, err)
+				// Try to get exit status
+				if cmd.ProcessState != nil {
+					m.logger.Errorf("Process exit code: %d", cmd.ProcessState.ExitCode())
+				}
+				// Read log file for errors
+				if logContent, err := os.ReadFile(fmt.Sprintf("/tmp/tinyproxy-%s-%d.log", ipv6.IP.String(), port)); err == nil && len(logContent) > 0 {
+					m.logger.Errorf("Tinyproxy log contents:\n%s", string(logContent))
+				}
+				instance.Status = models.ProxyStatusError
+				return instance, fmt.Errorf("tinyproxy process died during startup")
+			}
+		}
+		
+		if m.checkProxyHealth(ipv6.IP.String(), port) {
+			instance.Status = models.ProxyStatusRunning
+			m.logger.Infof("Proxy started successfully: %s on port %d (attempt %d/%d)", ipv6.IP.String(), port, i+1, retries)
+			break
+		} else if i == retries-1 {
+			instance.Status = models.ProxyStatusError
+			m.logger.Errorf("Proxy failed health check after %d attempts: %s on port %d", retries, ipv6.IP.String(), port)
+			// Read log file for debugging
+			if logContent, err := os.ReadFile(fmt.Sprintf("/tmp/tinyproxy-%s-%d.log", ipv6.IP.String(), port)); err == nil && len(logContent) > 0 {
+				m.logger.Errorf("Tinyproxy log contents:\n%s", string(logContent))
+			}
+		} else {
+			m.logger.Debugf("Proxy not ready yet, retrying... (attempt %d/%d)", i+1, retries)
+		}
 	}
 	
 	return instance, nil

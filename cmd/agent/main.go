@@ -32,7 +32,15 @@ var (
 
 func main() {
 	logger = logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	
+	// Use text formatter for better readability during debugging
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+		TimestampFormat: "2006-01-02 15:04:05",
+	})
+	
+	// Set debug level by default for better visibility
+	logger.SetLevel(logrus.DebugLevel)
 	
 	rootCmd := &cobra.Command{
 		Use:   "agent",
@@ -58,6 +66,7 @@ func main() {
 	rootCmd.PersistentFlags().IntP("metrics-port", "m", 9090, "Metrics port")
 	rootCmd.PersistentFlags().StringSlice("allowed-ips", []string{}, "IPs allowed to connect to proxies (comma-separated)")
 	rootCmd.PersistentFlags().StringP("proxy-mode", "", "restricted", "Proxy access mode: 'open' (allow all) or 'restricted' (allow only specified IPs)")
+	rootCmd.PersistentFlags().StringP("log-level", "l", "debug", "Log level: debug, info, warn, error")
 	
 	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
 		logger.Fatalf("Failed to bind flags: %v", err)
@@ -69,6 +78,21 @@ func main() {
 }
 
 func runAgent(cmd *cobra.Command, args []string) {
+	// Set log level
+	logLevel := viper.GetString("log-level")
+	switch logLevel {
+	case "debug":
+		logger.SetLevel(logrus.DebugLevel)
+	case "info":
+		logger.SetLevel(logrus.InfoLevel)
+	case "warn":
+		logger.SetLevel(logrus.WarnLevel)
+	case "error":
+		logger.SetLevel(logrus.ErrorLevel)
+	default:
+		logger.SetLevel(logrus.DebugLevel)
+	}
+	
 	configFile := viper.GetString("config")
 	if configFile != "" {
 		viper.SetConfigFile(configFile)

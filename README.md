@@ -1,5 +1,10 @@
 # Proxy-v6: Distributed IPv6 Proxy System
 
+[![Build and Test](https://github.com/aminsaedi/proxy-v6/actions/workflows/build.yml/badge.svg)](https://github.com/aminsaedi/proxy-v6/actions/workflows/build.yml)
+[![Release](https://github.com/aminsaedi/proxy-v6/actions/workflows/release.yml/badge.svg)](https://github.com/aminsaedi/proxy-v6/actions/workflows/release.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://go.dev)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 A distributed proxy management system that automatically discovers and utilizes IPv6 addresses across multiple nodes to create a pool of proxy servers with load balancing capabilities.
 
 ## Features
@@ -12,6 +17,8 @@ A distributed proxy management system that automatically discovers and utilizes 
 - **Metrics & Observability**: Prometheus-compatible metrics endpoints
 - **TUI Dashboard**: Real-time monitoring interface
 - **Auto-recovery**: Automatic restart of failed proxy instances
+- **Multi-Platform**: Pre-built binaries for Linux and macOS (AMD64/ARM64)
+- **Docker Support**: Ready-to-use Docker images and docker-compose setup
 
 ## Architecture
 
@@ -36,13 +43,66 @@ A distributed proxy management system that automatically discovers and utilizes 
 └───────┘ └───────┘
 ```
 
+## Quick Start
+
+### Option 1: Install from Release (Recommended)
+
+```bash
+# One-line installation script
+curl -sSL https://raw.githubusercontent.com/aminsaedi/proxy-v6/main/install.sh | bash
+
+# Or download specific version
+wget https://github.com/aminsaedi/proxy-v6/releases/latest/download/proxy-v6-linux-amd64.tar.gz
+tar xzf proxy-v6-linux-amd64.tar.gz
+sudo mv agent-linux-amd64 /usr/local/bin/proxy-v6-agent
+sudo mv coordinator-linux-amd64 /usr/local/bin/proxy-v6-coordinator
+sudo mv monitor-linux-amd64 /usr/local/bin/proxy-v6-monitor
+sudo chmod +x /usr/local/bin/proxy-v6-*
+```
+
+### Option 2: Docker Compose
+
+```bash
+# Clone the repository
+git clone https://github.com/aminsaedi/proxy-v6.git
+cd proxy-v6
+
+# Start the entire stack
+docker-compose up -d
+
+# Access services
+# - Coordinator API: http://localhost:8081
+# - Proxy endpoint: http://localhost:8888
+# - Grafana: http://localhost:3000 (admin/admin)
+# - Prometheus: http://localhost:9093
+```
+
+### Option 3: Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/aminsaedi/proxy-v6.git
+cd proxy-v6
+
+# Install dependencies
+make deps
+
+# Build all binaries
+make build
+
+# Or build specific components
+make build-agent
+make build-coordinator
+make build-monitor
+```
+
 ## Installation
 
 ### Prerequisites
 
-- Go 1.21 or higher
-- tinyproxy installed on agent nodes
-- IPv6 connectivity on agent nodes
+- **For Binary Installation**: None (self-contained)
+- **For Agent Nodes**: tinyproxy and IPv6 connectivity
+- **For Building**: Go 1.21+
 
 ### Install tinyproxy
 
@@ -55,20 +115,9 @@ sudo apt-get install tinyproxy
 
 # CentOS/RHEL
 sudo yum install tinyproxy
-```
 
-### Build from source
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/proxy-v6.git
-cd proxy-v6
-
-# Install dependencies
-make deps
-
-# Build all binaries
-make build
+# Alpine (Docker)
+apk add tinyproxy
 ```
 
 ## Usage
@@ -177,29 +226,56 @@ doctl compute droplet create \
   proxy-agent-1 proxy-agent-2 proxy-agent-3
 ```
 
-### 2. Setup Agent on Each Droplet
+### 2. Quick Setup Using Install Script
 
 ```bash
 # SSH into each droplet
 ssh root@droplet-ip
 
-# Install dependencies
-apt update && apt install -y tinyproxy golang-go git
+# Install tinyproxy
+apt update && apt install -y tinyproxy
 
-# Clone and build
-git clone https://github.com/yourusername/proxy-v6.git
-cd proxy-v6
-make deps build-agent
+# Install proxy-v6 agent
+curl -sSL https://raw.githubusercontent.com/aminsaedi/proxy-v6/main/install.sh | bash
 
-# Run agent
-./bin/agent --coordinator http://coordinator-ip:8081
+# Run agent (replace coordinator-ip with your coordinator's IP)
+proxy-v6-agent --coordinator http://coordinator-ip:8081
 ```
 
 ### 3. Setup Coordinator
 
 ```bash
 # On coordinator server
-./bin/coordinator --proxy-port 8888
+curl -sSL https://raw.githubusercontent.com/aminsaedi/proxy-v6/main/install.sh | bash
+proxy-v6-coordinator --proxy-port 8888
+```
+
+### 4. Using Systemd Services (Production)
+
+Create systemd service for agent (`/etc/systemd/system/proxy-v6-agent.service`):
+
+```ini
+[Unit]
+Description=Proxy-v6 Agent
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/proxy-v6-agent --coordinator http://coordinator-ip:8081
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+systemctl daemon-reload
+systemctl enable proxy-v6-agent
+systemctl start proxy-v6-agent
+systemctl status proxy-v6-agent
 ```
 
 ## Monitoring
@@ -260,10 +336,126 @@ Check network connectivity between agent and coordinator:
 curl http://coordinator-ip:8081/health
 ```
 
+## Docker Deployment
+
+### Using Pre-built Images (After Release)
+
+```bash
+# Run coordinator
+docker run -d \
+  --name proxy-v6-coordinator \
+  -p 8081:8081 \
+  -p 8888:8888 \
+  -p 9091:9091 \
+  ghcr.io/aminsaedi/proxy-v6:coordinator-latest
+
+# Run agent
+docker run -d \
+  --name proxy-v6-agent \
+  --privileged \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  -e COORDINATOR_URL=http://coordinator:8081 \
+  -p 8080:8080 \
+  -p 9090:9090 \
+  -p 10000-10100:10000-10100 \
+  ghcr.io/aminsaedi/proxy-v6:agent-latest
+```
+
+### Using Docker Compose
+
+The included `docker-compose.yml` provides a complete stack with:
+- 1 Coordinator
+- 2 Agents
+- Prometheus for metrics
+- Grafana for visualization
+
+```bash
+docker-compose up -d
+```
+
+## CI/CD
+
+This project uses GitHub Actions for automated builds and releases:
+
+- **Build & Test**: Runs on every push and PR
+- **Release**: Automatically builds binaries for multiple platforms when a version tag is pushed
+- **Manual Release**: Can be triggered manually from Actions tab
+
+### Creating a Release
+
+```bash
+# Tag and push to trigger automatic release
+git tag v1.0.0
+git push origin v1.0.0
+
+# Or use GitHub UI
+# Go to Releases → Create a new release → Enter tag v1.0.0
+```
+
+## Development
+
+### Project Structure
+
+```
+proxy-v6/
+├── cmd/
+│   ├── agent/         # Agent binary
+│   ├── coordinator/   # Coordinator binary
+│   └── monitor/       # TUI monitor binary
+├── internal/
+│   ├── ipscanner/     # IPv6 discovery
+│   ├── proxy/         # Proxy management
+│   ├── loadbalancer/  # Load balancing logic
+│   └── config/        # Configuration
+├── pkg/
+│   └── models/        # Shared data models
+├── docker-compose.yml # Full stack deployment
+├── Makefile          # Build automation
+└── install.sh        # Installation script
+```
+
+### Running Tests
+
+```bash
+make test
+```
+
+### Building for Different Platforms
+
+```bash
+# Build for Linux AMD64
+GOOS=linux GOARCH=amd64 make build
+
+# Build for macOS ARM64 (Apple Silicon)
+GOOS=darwin GOARCH=arm64 make build
+
+# Build for Linux ARM64
+GOOS=linux GOARCH=arm64 make build
+```
+
 ## License
 
 MIT License
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+### How to Contribute
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/aminsaedi/proxy-v6/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/aminsaedi/proxy-v6/discussions)
+
+## Acknowledgments
+
+- Built with Go and love for distributed systems
+- Uses tinyproxy for the underlying proxy functionality
+- Inspired by the need for better IPv6 proxy management

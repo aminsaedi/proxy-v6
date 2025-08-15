@@ -9,7 +9,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO="yourusername/proxy-v6"  # UPDATE THIS WITH YOUR GITHUB USERNAME
+REPO="${GITHUB_REPO:-aminsaedi/proxy-v6}"
 INSTALL_DIR="/usr/local/bin"
 TEMP_DIR=$(mktemp -d)
 

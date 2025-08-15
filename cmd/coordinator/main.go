@@ -30,7 +30,12 @@ var (
 
 func main() {
 	logger = logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	// Use text formatter for better readability
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+		TimestampFormat: "2006-01-02 15:04:05",
+	})
+	logger.SetLevel(logrus.InfoLevel) // Set to Info level, can be changed to Debug if needed
 	nodes = make(map[string]models.NodeInfo)
 	
 	rootCmd := &cobra.Command{

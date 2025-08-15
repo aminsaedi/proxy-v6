@@ -243,19 +243,24 @@ func (m *Manager) getNextPort() int {
 func (m *Manager) createTinyproxyConfig(path, bindIP string, port int) error {
 	// Build Allow directives based on access control mode
 	allowDirectives := ""
+	
+	// Always allow localhost connections for health checks
+	allowDirectives += "Allow 127.0.0.1\n"
+	allowDirectives += "Allow ::1\n"
+	
+	// Also allow connections from the same IPv6 address (for health checks)
+	allowDirectives += fmt.Sprintf("Allow %s\n", bindIP)
+	
 	if m.proxyMode == "restricted" && len(m.allowedIPs) > 0 {
 		// In restricted mode, only allow specified IPs
 		for _, ip := range m.allowedIPs {
 			allowDirectives += fmt.Sprintf("Allow %s\n", ip)
 		}
-	} else {
-		// In open mode or if no IPs specified, allow all (use with caution!)
-		allowDirectives = "Allow 0.0.0.0/0\nAllow ::/0"
-		if m.proxyMode == "restricted" {
-			// If restricted mode but no IPs, deny all by default
-			allowDirectives = "# No allowed IPs configured - denying all\n"
-		}
+	} else if m.proxyMode == "open" {
+		// In open mode, allow all (use with caution!)
+		allowDirectives += "Allow 0.0.0.0/0\nAllow ::/0"
 	}
+	// If restricted mode but no IPs, only localhost and bindIP are allowed
 	
 	config := fmt.Sprintf(`# Basic Configuration
 Port %d

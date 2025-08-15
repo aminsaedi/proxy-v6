@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +16,7 @@ import (
 	"proxy-v6/internal/ipscanner"
 	"proxy-v6/internal/proxy"
 	"proxy-v6/pkg/models"
+	"proxy-v6/pkg/version"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,12 +40,24 @@ func main() {
 		Run:   runAgent,
 	}
 	
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version.GetVersion())
+		},
+	}
+	
+	rootCmd.AddCommand(versionCmd)
+	
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path")
 	rootCmd.PersistentFlags().IntP("port", "p", 8080, "API listen port")
 	rootCmd.PersistentFlags().IntP("proxy-start", "", 10000, "Starting port for proxy instances")
 	rootCmd.PersistentFlags().IntP("proxy-end", "", 20000, "Ending port for proxy instances")
 	rootCmd.PersistentFlags().StringP("coordinator", "", "", "Coordinator URL")
 	rootCmd.PersistentFlags().IntP("metrics-port", "m", 9090, "Metrics port")
+	rootCmd.PersistentFlags().StringSlice("allowed-ips", []string{}, "IPs allowed to connect to proxies (comma-separated)")
+	rootCmd.PersistentFlags().StringP("proxy-mode", "", "restricted", "Proxy access mode: 'open' (allow all) or 'restricted' (allow only specified IPs)")
 	
 	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
 		logger.Fatalf("Failed to bind flags: %v", err)
@@ -69,6 +84,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 		CoordinatorURL: viper.GetString("coordinator"),
 		MetricsPort:    viper.GetInt("metrics-port"),
 		ExcludeInterfaces: []string{"docker", "veth", "br-"},
+		AllowedIPs:     viper.GetStringSlice("allowed-ips"),
+		ProxyMode:      viper.GetString("proxy-mode"),
 	}
 	
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,6 +93,28 @@ func runAgent(cmd *cobra.Command, args []string) {
 	
 	scanner := ipscanner.NewScanner(logger, cfg.ExcludeInterfaces)
 	manager := proxy.NewManager(logger, cfg.ProxyStartPort, cfg.ProxyEndPort)
+	
+	// Configure access control
+	if cfg.ProxyMode == "restricted" {
+		// Auto-detect coordinator IP if not explicitly set
+		allowedIPs := cfg.AllowedIPs
+		if cfg.CoordinatorURL != "" && len(allowedIPs) == 0 {
+			// Extract coordinator IP from URL
+			if u, err := url.Parse(cfg.CoordinatorURL); err == nil {
+				if host, _, err := net.SplitHostPort(u.Host); err == nil {
+					allowedIPs = append(allowedIPs, host)
+				} else {
+					// No port in URL
+					allowedIPs = append(allowedIPs, u.Hostname())
+				}
+			}
+		}
+		manager.SetAccessControl(allowedIPs, cfg.ProxyMode)
+		logger.Infof("Proxy access mode: %s, Allowed IPs: %v", cfg.ProxyMode, allowedIPs)
+	} else {
+		manager.SetAccessControl(cfg.AllowedIPs, cfg.ProxyMode)
+		logger.Warn("Proxy access mode: open - proxies will accept connections from anywhere!")
+	}
 	
 	logger.Info("Scanning for IPv6 addresses...")
 	ipv6Addresses, err := scanner.ScanIPv6Addresses()

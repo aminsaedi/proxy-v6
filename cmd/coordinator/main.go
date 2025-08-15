@@ -12,6 +12,7 @@ import (
 
 	"proxy-v6/internal/loadbalancer"
 	"proxy-v6/pkg/models"
+	"proxy-v6/pkg/version"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,6 +38,16 @@ func main() {
 		Short: "Coordinator service for managing distributed IPv6 proxies",
 		Run:   runCoordinator,
 	}
+	
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version.GetVersion())
+		},
+	}
+	
+	rootCmd.AddCommand(versionCmd)
 	
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path")
 	rootCmd.PersistentFlags().IntP("port", "p", 8081, "API listen port")

@@ -14,13 +14,15 @@ import (
 )
 
 type Manager struct {
-	logger     *logrus.Logger
-	instances  map[string]*models.ProxyInstance
-	mu         sync.RWMutex
-	startPort  int
-	endPort    int
+	logger      *logrus.Logger
+	instances   map[string]*models.ProxyInstance
+	mu          sync.RWMutex
+	startPort   int
+	endPort     int
 	currentPort int
-	processes  map[string]*exec.Cmd
+	processes   map[string]*exec.Cmd
+	allowedIPs  []string
+	proxyMode   string
 }
 
 func NewManager(logger *logrus.Logger, startPort, endPort int) *Manager {
@@ -31,7 +33,17 @@ func NewManager(logger *logrus.Logger, startPort, endPort int) *Manager {
 		endPort:     endPort,
 		currentPort: startPort,
 		processes:   make(map[string]*exec.Cmd),
+		allowedIPs:  []string{},
+		proxyMode:   "open",
 	}
+}
+
+func (m *Manager) SetAccessControl(allowedIPs []string, mode string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.allowedIPs = allowedIPs
+	m.proxyMode = mode
+	m.logger.Infof("Proxy access control set to mode: %s with %d allowed IPs", mode, len(allowedIPs))
 }
 
 func (m *Manager) StartProxy(ctx context.Context, ipv6 models.IPv6Address) (*models.ProxyInstance, error) {
@@ -159,6 +171,22 @@ func (m *Manager) getNextPort() int {
 }
 
 func (m *Manager) createTinyproxyConfig(path, bindIP string, port int) error {
+	// Build Allow directives based on access control mode
+	allowDirectives := ""
+	if m.proxyMode == "restricted" && len(m.allowedIPs) > 0 {
+		// In restricted mode, only allow specified IPs
+		for _, ip := range m.allowedIPs {
+			allowDirectives += fmt.Sprintf("Allow %s\n", ip)
+		}
+	} else {
+		// In open mode or if no IPs specified, allow all (use with caution!)
+		allowDirectives = "Allow 0.0.0.0/0\nAllow ::/0"
+		if m.proxyMode == "restricted" {
+			// If restricted mode but no IPs, deny all by default
+			allowDirectives = "# No allowed IPs configured - denying all\n"
+		}
+	}
+	
 	config := fmt.Sprintf(`
 Port %d
 Listen %s
@@ -167,14 +195,13 @@ MinSpareServers 5
 MaxSpareServers 20
 StartServers 10
 MaxRequestsPerChild 0
-Allow 0.0.0.0/0
-Allow ::/0
+%s
 ViaProxyName "tinyproxy"
 DisableViaHeader No
 LogLevel Info
 LogFile "/tmp/tinyproxy-%s-%d.log"
 PidFile "/tmp/tinyproxy-%s-%d.pid"
-`, port, bindIP, bindIP, port, bindIP, port)
+`, port, bindIP, allowDirectives, bindIP, port, bindIP, port)
 	
 	return os.WriteFile(path, []byte(config), 0644)
 }

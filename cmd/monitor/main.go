@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"proxy-v6/pkg/models"
+	"proxy-v6/pkg/version"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -213,6 +214,15 @@ func main() {
 		},
 	}
 	
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version.GetVersion())
+		},
+	}
+	
+	rootCmd.AddCommand(versionCmd)
 	rootCmd.Flags().StringP("coordinator", "c", "http://localhost:8081", "Coordinator URL")
 	
 	if err := rootCmd.Execute(); err != nil {

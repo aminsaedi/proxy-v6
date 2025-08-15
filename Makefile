@@ -13,14 +13,20 @@ deps:
 
 build: build-agent build-coordinator build-monitor
 
+# Version information
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -ldflags "-s -w -X proxy-v6/pkg/version.Version=$(VERSION) -X proxy-v6/pkg/version.GitCommit=$(GIT_COMMIT) -X proxy-v6/pkg/version.BuildDate=$(BUILD_DATE)"
+
 build-agent:
-	go build -o $(AGENT_BINARY) cmd/agent/main.go
+	go build $(LDFLAGS) -o $(AGENT_BINARY) cmd/agent/main.go
 
 build-coordinator:
-	go build -o $(COORDINATOR_BINARY) cmd/coordinator/main.go
+	go build $(LDFLAGS) -o $(COORDINATOR_BINARY) cmd/coordinator/main.go
 
 build-monitor:
-	go build -o $(MONITOR_BINARY) cmd/monitor/main.go
+	go build $(LDFLAGS) -o $(MONITOR_BINARY) cmd/monitor/main.go
 
 clean:
 	go clean

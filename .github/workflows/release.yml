@@ -47,18 +47,23 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
+          VERSION="${{ github.ref_name }}"
+          GIT_COMMIT="${{ github.sha }}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X proxy-v6/pkg/version.Version=${VERSION} -X proxy-v6/pkg/version.GitCommit=${GIT_COMMIT:0:7} -X proxy-v6/pkg/version.BuildDate=${BUILD_DATE}"
+          
           # Build agent
-          go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+          go build -ldflags="${LDFLAGS}" \
             -o dist/agent-${{ matrix.suffix }} \
             cmd/agent/main.go
           
           # Build coordinator
-          go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+          go build -ldflags="${LDFLAGS}" \
             -o dist/coordinator-${{ matrix.suffix }} \
             cmd/coordinator/main.go
           
           # Build monitor
-          go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+          go build -ldflags="${LDFLAGS}" \
             -o dist/monitor-${{ matrix.suffix }} \
             cmd/monitor/main.go
 

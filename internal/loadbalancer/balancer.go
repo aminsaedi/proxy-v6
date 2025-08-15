@@ -181,6 +181,7 @@ func (lb *LoadBalancer) performHealthChecks() {
 }
 
 func (lb *LoadBalancer) checkProxyHealth(proxy *ProxyEndpoint) {
+	// Simple TCP connection test - don't send HTTP requests as it causes errors in tinyproxy logs
 	conn, err := net.DialTimeout("tcp", proxy.Address, lb.healthCheck.timeout)
 	if err != nil {
 		proxy.Healthy = false

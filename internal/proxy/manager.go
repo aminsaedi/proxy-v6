@@ -187,31 +187,50 @@ func (m *Manager) createTinyproxyConfig(path, bindIP string, port int) error {
 		}
 	}
 	
-	config := fmt.Sprintf(`
+	config := fmt.Sprintf(`# Basic Configuration
 Port %d
 Listen %s
+
+# Server Configuration  
 MaxClients 100
 MinSpareServers 5
 MaxSpareServers 20
 StartServers 10
-MaxRequestsPerChild 0
+MaxRequestsPerChild 10000
+
+# Access Control
 %s
-ViaProxyName "tinyproxy"
-DisableViaHeader No
+
+# Logging
 LogLevel Info
 LogFile "/tmp/tinyproxy-%s-%d.log"
 PidFile "/tmp/tinyproxy-%s-%d.pid"
+
+# Proxy Configuration
+ViaProxyName "proxy-v6"
+DisableViaHeader No
+Timeout 600
+
+# Performance
+ConnectPort 443
+ConnectPort 563
+ConnectPort 993
+ConnectPort 995
+ConnectPort 80
+ConnectPort 8080
+ConnectPort 8443
 `, port, bindIP, allowDirectives, bindIP, port, bindIP, port)
 	
 	return os.WriteFile(path, []byte(config), 0644)
 }
 
 func (m *Manager) checkProxyHealth(ip string, port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("[%s]:%d", ip, port), 5*time.Second)
+	// Simple TCP connection test to avoid generating errors in tinyproxy logs
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("[%s]:%d", ip, port), 3*time.Second)
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	defer conn.Close()
 	return true
 }
 

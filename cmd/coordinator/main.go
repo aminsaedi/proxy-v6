@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -43,7 +44,9 @@ func main() {
 	rootCmd.PersistentFlags().IntP("metrics-port", "m", 9091, "Metrics port")
 	rootCmd.PersistentFlags().DurationP("health-interval", "", 30*time.Second, "Health check interval")
 	
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
+		logger.Fatalf("Failed to bind flags: %v", err)
+	}
 	
 	if err := rootCmd.Execute(); err != nil {
 		logger.Fatal(err)
@@ -100,7 +103,11 @@ func runCoordinator(cmd *cobra.Command, args []string) {
 	<-sigChan
 	
 	logger.Info("Shutting down...")
-	srv.Shutdown(nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Errorf("Server shutdown error: %v", err)
+	}
 }
 
 func setupAPIRouter(lb *loadbalancer.LoadBalancer) *gin.Engine {
@@ -200,18 +207,15 @@ func cleanupStaleNodes() {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	
-	for {
-		select {
-		case <-ticker.C:
-			mu.Lock()
-			now := time.Now()
-			for nodeID, node := range nodes {
-				if now.Sub(node.UpdatedAt) > 2*time.Minute {
-					logger.Warnf("Removing stale node: %s", nodeID)
-					delete(nodes, nodeID)
-				}
+	for range ticker.C {
+		mu.Lock()
+		now := time.Now()
+		for nodeID, node := range nodes {
+			if now.Sub(node.UpdatedAt) > 2*time.Minute {
+				logger.Warnf("Removing stale node: %s", nodeID)
+				delete(nodes, nodeID)
 			}
-			mu.Unlock()
 		}
+		mu.Unlock()
 	}
 }

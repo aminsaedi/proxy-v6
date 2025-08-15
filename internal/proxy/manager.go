@@ -189,7 +189,9 @@ func (m *Manager) checkProxyHealth(ip string, port int) bool {
 }
 
 func (m *Manager) monitorProcess(instanceID string, cmd *exec.Cmd) {
-	cmd.Wait()
+	if err := cmd.Wait(); err != nil {
+		m.logger.Warnf("Process exited with error for %s: %v", instanceID, err)
+	}
 	
 	m.mu.Lock()
 	defer m.mu.Unlock()

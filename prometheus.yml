@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'coordinator'
+    static_configs:
+      - targets: ['coordinator:9091']
+        labels:
+          service: 'coordinator'
+
+  - job_name: 'agent-1'
+    static_configs:
+      - targets: ['agent-1:9090']
+        labels:
+          service: 'agent'
+          instance: 'agent-1'
+
+  - job_name: 'agent-2'
+    static_configs:
+      - targets: ['agent-2:9090']
+        labels:
+          service: 'agent'
+          instance: 'agent-2'

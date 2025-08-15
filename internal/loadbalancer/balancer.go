@@ -157,18 +157,17 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		lb.logger.Warnf("Error copying response body: %v", err)
+	}
 }
 
 func (lb *LoadBalancer) startHealthChecks() {
 	ticker := time.NewTicker(lb.healthCheck.interval)
 	defer ticker.Stop()
 	
-	for {
-		select {
-		case <-ticker.C:
-			lb.performHealthChecks()
-		}
+	for range ticker.C {
+		lb.performHealthChecks()
 	}
 }
 

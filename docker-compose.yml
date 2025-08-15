@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  coordinator:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    container_name: proxy-v6-coordinator
+    ports:
+      - "8081:8081"  # API port
+      - "8888:8888"  # Proxy port
+      - "9091:9091"  # Metrics port
+    environment:
+      - LOG_LEVEL=info
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+  agent-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: proxy-v6-agent-1
+    ports:
+      - "8080:8080"    # API port
+      - "9090:9090"    # Metrics port
+      - "10000-10100:10000-10100"  # Proxy ports
+    environment:
+      - COORDINATOR_URL=http://coordinator:8081
+      - PROXY_START_PORT=10000
+      - PROXY_END_PORT=10100
+    depends_on:
+      - coordinator
+    networks:
+      - proxy-network
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    privileged: true  # Required for network interface access
+
+  agent-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: proxy-v6-agent-2
+    ports:
+      - "8082:8080"    # API port
+      - "9092:9090"    # Metrics port
+      - "10101-10200:10101-10200"  # Proxy ports
+    environment:
+      - COORDINATOR_URL=http://coordinator:8081
+      - PROXY_START_PORT=10101
+      - PROXY_END_PORT=10200
+    depends_on:
+      - coordinator
+    networks:
+      - proxy-network
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    privileged: true
+
+  # Prometheus for metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: proxy-v6-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9093:9090"
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: proxy-v6-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+networks:
+  proxy-network:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001:db8::/64
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,104 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build all platforms
+        run: |
+          mkdir -p dist
+          
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/agent-linux-amd64 cmd/agent/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/coordinator-linux-amd64 cmd/coordinator/main.go
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/monitor-linux-amd64 cmd/monitor/main.go
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/agent-linux-arm64 cmd/agent/main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/coordinator-linux-arm64 cmd/coordinator/main.go
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/monitor-linux-arm64 cmd/monitor/main.go
+          
+          # Darwin AMD64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/agent-darwin-amd64 cmd/agent/main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/coordinator-darwin-amd64 cmd/coordinator/main.go
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/monitor-darwin-amd64 cmd/monitor/main.go
+          
+          # Darwin ARM64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/agent-darwin-arm64 cmd/agent/main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/coordinator-darwin-arm64 cmd/coordinator/main.go
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/monitor-darwin-arm64 cmd/monitor/main.go
+
+      - name: Create archives
+        run: |
+          cd dist
+          
+          # Create tar.gz for each platform
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            tar czf proxy-v6-${platform}.tar.gz \
+              agent-${platform} \
+              coordinator-${platform} \
+              monitor-${platform}
+          done
+          
+          # Create checksums
+          sha256sum *.tar.gz > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          body: |
+            ## Proxy-v6 Release ${{ github.event.inputs.version }}
+            
+            ### Installation
+            
+            #### Quick Install (Linux/macOS)
+            ```bash
+            export GITHUB_REPO="${{ github.repository }}"
+            curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            ```
+            
+            #### Manual Installation
+            1. Download the appropriate archive for your platform
+            2. Extract: `tar xzf proxy-v6-<platform>.tar.gz`
+            3. Move binaries to your PATH
+            
+            ### Checksums
+            See `checksums.txt` for SHA256 checksums of all archives.
+            
+            ### What's New
+            - Initial release of the distributed IPv6 proxy system
+            - Support for automatic IPv6 discovery
+            - Load balancing across multiple nodes
+            - TUI monitoring interface
+            - Prometheus metrics integration

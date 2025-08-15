@@ -44,7 +44,9 @@ func main() {
 	rootCmd.PersistentFlags().StringP("coordinator", "", "", "Coordinator URL")
 	rootCmd.PersistentFlags().IntP("metrics-port", "m", 9090, "Metrics port")
 	
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
+		logger.Fatalf("Failed to bind flags: %v", err)
+	}
 	
 	if err := rootCmd.Execute(); err != nil {
 		logger.Fatal(err)
@@ -124,10 +126,14 @@ func runAgent(cmd *cobra.Command, args []string) {
 	<-sigChan
 	
 	logger.Info("Shutting down...")
-	srv.Shutdown(ctx)
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Errorf("Server shutdown error: %v", err)
+	}
 	
 	for _, instance := range manager.GetInstances() {
-		manager.StopProxy(instance.ID)
+		if err := manager.StopProxy(instance.ID); err != nil {
+			logger.Errorf("Failed to stop proxy %s: %v", instance.ID, err)
+		}
 	}
 }
 
@@ -173,36 +179,33 @@ func reportToCoordinator(manager *proxy.Manager) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	hostname, _ := os.Hostname()
 	
-	for {
-		select {
-		case <-ticker.C:
-			nodeInfo := models.NodeInfo{
-				NodeID:   hostname,
-				Hostname: hostname,
-				Proxies:  manager.GetInstances(),
-				UpdatedAt: time.Now(),
-			}
-			
-			data, err := json.Marshal(nodeInfo)
-			if err != nil {
-				logger.Errorf("Failed to marshal node info: %v", err)
-				continue
-			}
-			
-			resp, err := client.Post(
-				fmt.Sprintf("%s/api/nodes/%s", cfg.CoordinatorURL, hostname),
-				"application/json",
-				bytes.NewReader(data),
-			)
-			if err != nil {
-				logger.Errorf("Failed to report to coordinator: %v", err)
-				continue
-			}
-			resp.Body.Close()
-			
-			if resp.StatusCode != http.StatusOK {
-				logger.Warnf("Coordinator returned status %d", resp.StatusCode)
-			}
+	for range ticker.C {
+		nodeInfo := models.NodeInfo{
+			NodeID:   hostname,
+			Hostname: hostname,
+			Proxies:  manager.GetInstances(),
+			UpdatedAt: time.Now(),
+		}
+		
+		data, err := json.Marshal(nodeInfo)
+		if err != nil {
+			logger.Errorf("Failed to marshal node info: %v", err)
+			continue
+		}
+		
+		resp, err := client.Post(
+			fmt.Sprintf("%s/api/nodes/%s", cfg.CoordinatorURL, hostname),
+			"application/json",
+			bytes.NewReader(data),
+		)
+		if err != nil {
+			logger.Errorf("Failed to report to coordinator: %v", err)
+			continue
+		}
+		resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			logger.Warnf("Coordinator returned status %d", resp.StatusCode)
 		}
 	}
 }
